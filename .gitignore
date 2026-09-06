@@ -1,0 +1,34 @@
+# виртуальное окружение
+.venv/
+venv/
+env/
+
+# байткод и кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# файлы pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# переменные окружения / секреты
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# ОС-мусор
+.DS_Store
+Thumbs.db
+
+# временные файлы, которые может создавать сама конвертация при локальном запуске
+*.tmp
+tmp/
+
+# сборка Docker
+*.log

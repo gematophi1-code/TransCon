@@ -1,12 +1,14 @@
 import mimetypes
 import tempfile
-from pathlib import Path
 from urllib.parse import quote
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from PIL import UnidentifiedImageError
+from pypdf.errors import PdfReadError
 
 from src.converter.documents import pdf_to_txt, txt_to_pdf
 from src.converter.image import convert_image
@@ -16,6 +18,7 @@ app.mount("/static", StaticFiles(directory="src/static"), name="static")
 templates = Jinja2Templates(directory="src/templates")
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+_MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 МБ
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -28,9 +31,13 @@ async def convert(file: UploadFile = File(...), target_format: str = Form(...)):
     suffix = Path(file.filename).suffix.lower()
     target_format = target_format.lower()
 
+    content = await file.read()
+    if len(content) > _MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Файл слишком большой (максимум 20 МБ)")
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         input_path = Path(tmp_dir) / file.filename
-        input_path.write_bytes(await file.read())
+        input_path.write_bytes(content)
 
         try:
             if suffix in _IMAGE_EXTENSIONS:
@@ -41,11 +48,13 @@ async def convert(file: UploadFile = File(...), target_format: str = Form(...)):
                 output_path = pdf_to_txt(input_path)
             else:
                 raise HTTPException(status_code=400, detail="Неподдерживаемая пара форматов")
-        except ValueError as error:
-            raise HTTPException(status_code=400, detail=str(error))
+        except (ValueError, UnidentifiedImageError, PdfReadError, OSError) as error:
+            raise HTTPException(
+                status_code=400,
+                detail="Не удалось обработать файл — возможно, он повреждён или не соответствует ожидаемому формату",
+            )
 
-        # Важно: читаем байты результата, пока временная папка ещё жива
-        content = output_path.read_bytes()
+        result_content = output_path.read_bytes()
         media_type, _ = mimetypes.guess_type(output_path.name)
 
     return Response(

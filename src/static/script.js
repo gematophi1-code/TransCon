@@ -3,6 +3,9 @@ const IMAGE_FORMATS = ["jpeg", "png", "gif", "bmp", "webp"];
 
 const fileInput = document.getElementById("file");
 const formatSelect = document.getElementById("target_format");
+const submitButton = document.querySelector("button[type='submit']");
+
+submitButton.disabled = true;
 
 function normalize(extension) {
     return extension === "jpg" ? "jpeg" : extension;
@@ -28,10 +31,12 @@ fileInput.addEventListener("change", () => {
     if (options.length === 0) {
         formatSelect.innerHTML = '<option value="">формат не поддерживается</option>';
         formatSelect.disabled = true;
+        submitButton.disabled = true;
         return;
     }
 
     formatSelect.disabled = false;
+    submitButton.disabled = false;
     for (const format of options) {
         const option = document.createElement("option");
         option.value = format;

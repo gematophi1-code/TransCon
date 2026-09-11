@@ -1,5 +1,6 @@
 import mimetypes
 import tempfile
+import zipfile
 from urllib.parse import quote
 from pathlib import Path
 
@@ -8,10 +9,20 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import UnidentifiedImageError
+from docx.opc.exceptions import PackageNotFoundError
 from pypdf.errors import PdfReadError
 
-from src.converter.documents import pdf_to_txt, txt_to_pdf
+from src.converter.documents import docx_to_pdf, docx_to_txt, pdf_to_docx, pdf_to_txt, txt_to_docx, txt_to_pdf
 from src.converter.image import convert_image
+
+_DOCUMENT_CONVERTERS = {
+    ("txt", "pdf"): txt_to_pdf,
+    ("pdf", "txt"): pdf_to_txt,
+    ("docx", "txt"): docx_to_txt,
+    ("txt", "docx"): txt_to_docx,
+    ("docx", "pdf"): docx_to_pdf,
+    ("pdf", "docx"): pdf_to_docx,
+}
 
 app = FastAPI(title="TransCon")
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
@@ -42,13 +53,18 @@ async def convert(file: UploadFile = File(...), target_format: str = Form(...)):
         try:
             if suffix in _IMAGE_EXTENSIONS:
                 output_path = convert_image(input_path, target_format)
-            elif suffix == ".txt" and target_format == "pdf":
-                output_path = txt_to_pdf(input_path)
-            elif suffix == ".pdf" and target_format == "txt":
-                output_path = pdf_to_txt(input_path)
+            elif (converter := _DOCUMENT_CONVERTERS.get((suffix.lstrip("."), target_format))) is not None:
+                output_path = converter(input_path)
             else:
                 raise HTTPException(status_code=400, detail="Неподдерживаемая пара форматов")
-        except (ValueError, UnidentifiedImageError, PdfReadError, OSError) as error:
+        except (
+            ValueError,
+            UnidentifiedImageError,
+            PdfReadError,
+            PackageNotFoundError,
+            zipfile.BadZipFile,
+            OSError,
+        ) as error:
             raise HTTPException(
                 status_code=400,
                 detail="Не удалось обработать файл — возможно, он повреждён или не соответствует ожидаемому формату",
@@ -58,7 +74,7 @@ async def convert(file: UploadFile = File(...), target_format: str = Form(...)):
         media_type, _ = mimetypes.guess_type(output_path.name)
 
     return Response(
-        content=content,
+        content=result_content,
         media_type=media_type or "application/octet-stream",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(output_path.name)}"

@@ -15,8 +15,9 @@ const normalize = (ext) => (ext === "jpg" ? "jpeg" : ext);
 function optionsFor(name) {
     const ext = normalize((name.split(".").pop() || "").toLowerCase());
     if (IMAGE_EXTENSIONS.includes(ext)) return IMAGE_FORMATS.filter((f) => f !== ext);
-    if (ext === "txt") return ["pdf"];
-    if (ext === "pdf") return ["txt"];
+    if (ext === "txt") return ["pdf", "docx"];
+    if (ext === "pdf") return ["txt", "docx"];
+    if (ext === "docx") return ["txt", "pdf"];
     return [];
 }
 
